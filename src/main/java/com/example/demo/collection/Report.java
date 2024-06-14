@@ -14,7 +14,7 @@ import java.util.List;
 @Document(collection = "reports")
 public class Report {
     @Id
-    private String reportID;
+    private String id;
     private String reportName;
     private String accountEmail;
     private String reportCreated;
