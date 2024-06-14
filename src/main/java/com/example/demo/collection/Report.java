@@ -21,5 +21,4 @@ public class Report {
     
     private List<Transaction> transactionList;
 
-    // Getters and setters
 }

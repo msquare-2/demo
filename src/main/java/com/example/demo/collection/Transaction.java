@@ -20,5 +20,4 @@ public class Transaction {
     @DBRef
     private Receipt receipt;
 
-    // Getters and setters
 }

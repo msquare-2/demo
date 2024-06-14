@@ -14,6 +14,4 @@ public class Receipt {
     @Id
     private String id;
     private String url;
-
-    // Getters and setters
 }
