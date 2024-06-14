@@ -5,14 +5,14 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.demo.service.ReportService;
+import com.example.demo.service.ExpensifyService;
 
 @RestController
 @RequestMapping("/api/reports")
 public class ReportController {
 
     @Autowired
-    private ReportService reportService;
+    private ExpensifyService reportService;
 
     @GetMapping("/fetch")
     public void fetchAndSaveReports() {

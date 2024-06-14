@@ -32,7 +32,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
-public class ReportService {
+public class ExpensifyService {
 
     @Autowired
     private ReportRepository reportRepository;
@@ -55,49 +55,37 @@ public class ReportService {
     private static final String EXPENSIFY_API_URL = "https://integrations.expensify.com/Integration-Server/ExpensifyIntegrations";
 
     public void fetchAndSaveReports() {
-        MultiValueMap<String, String> requestBody = new LinkedMultiValueMap<>();
-        MultiValueMap<String, String> requestHeaders = new LinkedMultiValueMap<>();
-        HttpHeaders headers = new HttpHeaders();
+        MultiValueMap<String, String> reportGenerationRequestBody = new LinkedMultiValueMap<>();
+        HttpHeaders reportGenerationHeaders = new HttpHeaders();
 
-        Map<String, Object> reportGenerationReqPayload = new HashMap<>();
-        Map<String, Object> reportDownloadReqPayload = new HashMap<>();
         try {
 
-            requestBody.add("requestJobDescription", getReportGenerationJobDescription());
-            requestBody.add("template", TemplateUtils.loadTemplate("classpath:templates/expensify_template.ftl"));
+            reportGenerationRequestBody.add("requestJobDescription", getReportGenerationJobDescription());
+            reportGenerationRequestBody.add("template",
+                    TemplateUtils.loadTemplate("classpath:templates/expensify_template.ftl"));
 
-            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+            reportGenerationHeaders.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
 
-            HttpEntity<MultiValueMap<String, String>> requestEntity = new HttpEntity<>(requestBody, headers);
+            HttpEntity<MultiValueMap<String, String>> reportGenerationRequestEntity = new HttpEntity<>(
+                    reportGenerationRequestBody, reportGenerationHeaders);
 
-            ResponseEntity<String> responseEntity = restTemplate.exchange(EXPENSIFY_API_URL, HttpMethod.POST,
-                    requestEntity, String.class);
+            ResponseEntity<String> reportGenerationResponseEntity = restTemplate.exchange(EXPENSIFY_API_URL,
+                    HttpMethod.POST,
+                    reportGenerationRequestEntity, String.class);
 
-            if (responseEntity.getStatusCode().equals(HttpStatus.OK)) {
-                String reportName = responseEntity.getBody();
-                reportDownloadReqPayload.put("requestJobDescription", Map.of(
-                        "type", "download",
-                        "credentials", Map.of(
-                                "partnerUserID", expensifyConfig.getId(),
-                                "partnerUserSecret", expensifyConfig.getSecret()),
-                        "fileName", reportName,
-                        "fileSystem", "integrationServer"));
-                String report = restTemplate.postForObject(EXPENSIFY_API_URL, reportDownloadReqPayload, String.class);
-                System.out.println(report);
+            if (reportGenerationResponseEntity.getStatusCode().equals(HttpStatus.OK)) {
+                Report[] reports = fetchDownloadReport(reportGenerationResponseEntity.getBody());
+                if (reports != null && reports.length > 0) {
+                    saveReports(Arrays.asList(reports));
+                }
             } else {
-                System.out.println(responseEntity.getStatusCode());
+                System.out.println(reportGenerationResponseEntity.getStatusCode());
             }
 
         } catch (IOException e) {
             e.printStackTrace();
         }
         // Fetch data from external API
-        Report[] reports = restTemplate.getForObject(EXPENSIFY_API_URL, Report[].class);
-
-        if (reports != null) {
-            // Process and save the data
-            saveReports(Arrays.asList(reports));
-        }
     }
 
     private String getReportGenerationJobDescription() throws JsonProcessingException {
@@ -124,6 +112,41 @@ public class ReportService {
                 Map.of("actionName", "email", "recipients", "manager@domain.com,finances@domain.com", "message",
                         "Report is ready.")));
         return objectMapper.writeValueAsString(requestJobDescription);
+    }
+
+    private Report[] fetchDownloadReport(String reportFileName) {
+        MultiValueMap<String, String> reportDownloadRequestBody = new LinkedMultiValueMap<>();
+        HttpHeaders reportDownloadHeaders = new HttpHeaders();
+        reportDownloadHeaders.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        Map<String, Object> requestJobDescriptionMap = new HashMap<>();
+        requestJobDescriptionMap.put("type", "download");
+        requestJobDescriptionMap.put("credentials", Map.of(
+                "partnerUserID", expensifyConfig.getId(),
+                "partnerUserSecret", expensifyConfig.getSecret()));
+        requestJobDescriptionMap.put("fileName", reportFileName);
+        requestJobDescriptionMap.put("fileSystem", "integrationServer");
+        
+        try {
+            String requestJobDescription = objectMapper.writeValueAsString(requestJobDescriptionMap);
+
+            reportDownloadRequestBody.add("requestJobDescription", requestJobDescription);
+
+            HttpEntity<MultiValueMap<String, String>> reportDownloadRequestEntity = new HttpEntity<>(
+                    reportDownloadRequestBody, reportDownloadHeaders);
+
+            ResponseEntity<String> reportDownloadresponseEntity = restTemplate.exchange(EXPENSIFY_API_URL,
+                    HttpMethod.POST,
+                    reportDownloadRequestEntity, String.class);
+
+            if(reportDownloadresponseEntity.getBody() != null) {
+                Report[] reports = objectMapper.readValue(reportDownloadresponseEntity.getBody(), Report[].class);
+                return reports;
+            }
+            System.out.println(reportDownloadresponseEntity.getBody());
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 
     public void saveReports(List<Report> reports) {
